@@ -17,9 +17,10 @@ def reset_color():
 color_i = 1
 id_i = 0
 class SerialWrapper(object):
-    def __init__(self, port, baudrate):
+    def __init__(self, port, baudrate, receive_only):
         global color_i, id_i
         self.serial = serial.Serial(port=port, baudrate=baudrate)
+        self.receive_only = receive_only
         self.row = 0
         self.col = 0
         self.next_to_echo = 0
@@ -61,10 +62,10 @@ class SerialWrapper(object):
 
         self.row += 1
 
-parser = argparse.ArgumentParser(description="Bridge two or more serial ports")
+parser = argparse.ArgumentParser(description="Bridge two or more serial ports", epilog='Example: "%(prog)s COM2 COM3 +COM4 57600": This will cause COM2 and COM3 to transmit to and receive from all interfaces (except themselves), while COM4 will only receive. All will use baudrate 57600.')
 parser.add_argument("-p", "--plain", help="Turn off highlighting", action="store_true")
 parser.add_argument("-q", "--quiet", help="Do not dump to screen", action="store_true")
-parser.add_argument("port", help="Serial device to bridge, e.g. COM5 or /dev/ttyUSB0. More than two may be specified.", nargs='+')
+parser.add_argument("port", help="Serial device to bridge, e.g. 'COM5' or '/dev/ttyUSB0'. More than two may be specified. Preface with a plus for receive only.\n\n", nargs='+')
 parser.add_argument("baudrate", help="The baudrate for the serial devices", type=int)
 args = parser.parse_args()
 
@@ -78,13 +79,19 @@ if not args.plain and os.name == 'nt':
 
 serials = []
 for s in args.port:
-    #[serial, rowcounter, colcounter, bytearray, color]
-    serials.append(SerialWrapper(s, args.baudrate))
+    if s[0] == '+':
+        #[serial, rowcounter, colcounter, bytearray, color]
+        serials.append(SerialWrapper(s[1:], args.baudrate, True))
+    else:
+        serials.append(SerialWrapper(s, args.baudrate, False))
+
 
 try:
     while True:
         #receive from ports
         for s in serials:
+            if s.receive_only:
+                continue
             while True:
                 if s.serial.inWaiting():
                     s.buf[s.col] = s.serial.read()[0]
